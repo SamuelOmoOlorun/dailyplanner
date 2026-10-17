@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Daily Planner",
+    "slug": "dailyplanner",
+    "version": "0.0.0",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["ios", "android", "web"],
+    "plugins": ["expo-sqlite", "expo-notifications"],
+    "android": {
+      "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"]
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
