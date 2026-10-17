@@ -2,12 +2,61 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { initializeDatabase } from '../src/storage/database.ts';
-import { listTasks, listReminderTasks, saveTask } from '../src/storage/tasks.ts';
+import { deleteTask, listTasks, listReminderTasks, saveTask } from '../src/storage/tasks.ts';
+import { checkRollover } from '../src/storage/review.ts';
+import { getPreference, setPreference } from '../src/storage/preferences.ts';
+import { pendingReview } from '../src/tasks/review.ts';
 import { daySegment, endDate, layoutTasks, overlaps, reminderTime, validateTask } from '../src/tasks/model.ts';
 import { reconcileReminders } from '../src/notifications/reconcile.ts';
 
 const draft = { title: 'Focus', date: '2026-10-17', start_time: '09:05', end_time: '09:40', priority: 'medium', is_completed: 0, reminder_offset_minutes: 5 };
 const task = (id, changes = {}) => ({ ...draft, id, created_at: '', updated_at: '', ...changes });
+
+test('rollover checks first launch, same-day acknowledgement, new day, and multiple missed days', async (t) => {
+  const db = await database(t);
+  const morning = new Date('2026-10-17T08:00:00');
+  assert.equal(await checkRollover(db, morning), false);
+  assert.equal(await getPreference(db, 'last_opened_date'), '2026-10-17');
+  await saveTask(db, { ...draft, date: '2026-10-14' });
+  assert.equal(await checkRollover(db, morning), false);
+  assert.equal(await checkRollover(db, new Date('2026-10-18T08:00:00')), true);
+  assert.equal(await getPreference(db, 'last_opened_date'), '2026-10-17');
+  await setPreference(db, 'last_opened_date', '2026-10-18');
+  assert.equal(await checkRollover(db, new Date('2026-10-18T08:00:00')), false);
+});
+
+test('review excludes completed/future tasks and protects ongoing overnight blocks', () => {
+  const rows = [task('old', { date: '2026-10-15' }), task('done', { date: '2026-10-15', is_completed: 1 }),
+    task('night', { date: '2026-10-16', start_time: '23:00', end_time: '01:00' }), task('today'), task('future', { date: '2026-10-18' })];
+  assert.deepEqual(pendingReview(rows, 'rollover', new Date('2026-10-17T00:30:00')).map(t => t.id), ['old']);
+  assert.deepEqual(pendingReview(rows, 'rollover', new Date('2026-10-17T01:00:00')).map(t => t.id), ['old', 'night']);
+  assert.deepEqual(pendingReview(rows, 'manual', new Date('2026-10-17T18:00:00')).map(t => t.id), ['old', 'night', 'today']);
+});
+
+test('migration preserves identity and metadata; discard deletes both overnight segments and cancels reminders', async (t) => {
+  const db = await database(t);
+  const saved = await saveTask(db, { ...draft, date: '2026-10-16', start_time: '23:00', end_time: '01:00', priority: 'high' });
+  const moved = await saveTask(db, { ...saved, date: '2026-10-17', start_time: '23:05' }, saved.id);
+  assert.equal(moved.id, saved.id);
+  assert.equal(moved.created_at, saved.created_at);
+  assert.equal(moved.priority, 'high');
+  assert.equal(moved.reminder_offset_minutes, 5);
+  const mock = backend();
+  await reconcileReminders(mock, await listReminderTasks(db), new Date('2026-10-17T08:00:00').getTime());
+  assert.equal(mock.entries.size, 1);
+  await deleteTask(db, saved.id);
+  for (const date of ['2026-10-16', '2026-10-17', '2026-10-18']) assert.equal((await listTasks(db, date)).length, 0);
+  await reconcileReminders(mock, await listReminderTasks(db));
+  assert.equal(mock.entries.size, 0);
+  await assert.rejects(deleteTask(db, saved.id), /no longer exists/);
+});
+
+test('rollover read failure does not acknowledge the date and can be retried', async (t) => {
+  const db = await database(t);
+  await assert.rejects(checkRollover({ ...db, getAllAsync: async () => { throw new Error('read failed'); } }), /read failed/);
+  assert.equal(await getPreference(db, 'last_opened_date'), null);
+  assert.equal(await checkRollover(db), false);
+});
 
 async function database(t) {
   const sqlite = new DatabaseSync(':memory:');

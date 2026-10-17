@@ -108,7 +108,7 @@ CREATE TABLE app_preferences (
 
 ## **7. Detailed Step-by-Step Development Execution**
 
-Implementation status: Phases 1 and 2 are implemented. Phases 3–4 remain pending; their checkboxes reflect that they have not been implemented. Physical-device notification validation remains outstanding.
+Implementation status: Phases 1, 2, and 3 are implemented. Phase 4 remains pending. Physical-device notification validation remains outstanding.
 
 ### **Phase 1: Project & Architecture Setup**
 
@@ -125,8 +125,10 @@ Implementation status: Phases 1 and 2 are implemented. Phases 3–4 remain pendi
 
 ### **Phase 3: Dual Rollover Workflow**
 
-- [ ] **App Startup Hook:** Logic that checks `last_opened_date` against current system date. If different, invoke Migration UI for pending past tasks.
-- [ ] **"Wrap Up Today" Manual View:** A lightweight review screen where users can clear or re-assign unfinished tasks at night.
+- [x] **App Startup Hook:** Logic that checks `last_opened_date` against current system date. If different, invoke Migration UI for pending past tasks.
+- [x] **"Wrap Up Today" Manual View:** A lightweight review screen where users can clear or re-assign unfinished tasks at night.
+
+Phase 3 behavior: Wrap Up Today is available all day, with an evening prompt from 18:00 local time. Discard permanently deletes a task after confirmation. Manual rescheduling supports today or any future date; startup migration targets today. Review later acknowledges the current date, keeping deferred tasks available in manual review and the next day's startup review. Ongoing overnight tasks are excluded from overdue startup review until their end time. Checks also run on app resume/focus and across midnight.
 
 ### **Phase 4: Polish & Web Cross-Platform Optimization**
 

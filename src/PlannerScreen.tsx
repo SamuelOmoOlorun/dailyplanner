@@ -4,6 +4,8 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StatusBar, StyleShe
 import { Appearance } from './components/Appearance';
 import { DailyTimeline } from './components/DailyTimeline';
 import { TaskEditor } from './components/TaskEditor';
+import { TaskReview } from './components/TaskReview';
+import { useRollover } from './tasks/useRollover';
 import { useReminders } from './notifications/useReminders';
 import { listTasks, saveTask } from './storage/tasks';
 import { dateKey, daySegment, type Task, type TaskDraft } from './tasks/model';
@@ -18,6 +20,8 @@ export function PlannerScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ task: Task | null } | null>(null);
+  const [review, setReview] = useState<'rollover' | 'manual' | null>(null);
+  const rollover = useRollover(() => setReview('rollover'));
   const reminders = useReminders(revision);
 
   useEffect(() => {
@@ -63,6 +67,11 @@ export function PlannerScreen() {
         <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Your day, intentionally.</Text>
         <Text style={{ color: colors.muted, fontSize: 16 }}>Give your priorities a place in your day.</Text>
       </View>
+      <View style={{ gap: 10 }}>
+        {rollover.now.getHours() >= 18 && <Text style={{ color: colors.muted }}>Make space for tomorrow. Review your unfinished tasks.</Text>}
+        <Pressable accessibilityRole="button" onPress={() => setReview('manual')} style={[styles.smallButton, { borderColor: colors.border }]}><Text style={{ color: colors.accent }}>Wrap Up Today</Text></Pressable>
+        {rollover.error && <Pressable accessibilityRole="button" onPress={() => { void rollover.refresh(); }}><Text accessibilityRole="alert" style={{ color: colors.error }}>{rollover.error}</Text></Pressable>}
+      </View>
       <View style={styles.dayHeading}>
         <View style={{ flex: 1, gap: 8 }}>
           <Text accessibilityRole="header" style={{ color: colors.text, fontSize: 20, fontWeight: '600' }}>{formattedDate}</Text>
@@ -85,7 +94,8 @@ export function PlannerScreen() {
         <Pressable accessibilityRole="button" onPress={() => setRevision((value) => value + 1)}><Text style={{ color: colors.accent }}>Retry loading</Text></Pressable>
       </View> : <DailyTimeline tasks={tasks} date={date} onEdit={(task) => setEditor({ task })} />}
     </View>
-    {editor && <TaskEditor task={editor.task} date={date} onClose={() => setEditor(null)} onSave={commit} />}
+    {editor && !review && <TaskEditor task={editor.task} date={date} onClose={() => setEditor(null)} onSave={commit} />}
+    {review && <TaskReview mode={review} onClose={() => setReview(null)} onChange={() => setRevision((value) => value + 1)} />}
   </ScrollView>;
 }
 

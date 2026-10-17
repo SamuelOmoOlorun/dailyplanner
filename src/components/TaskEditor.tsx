@@ -7,12 +7,13 @@ import { endDate, isDate, overlaps, reminderTime, shiftDate, validateTask, type 
 import { TimeBlockInput } from './TimeBlockInput';
 import { DateTimeInput } from './DateTimeInput';
 
-export function TaskEditor({ task, date, onClose, onSave }: {
+export function TaskEditor({ task, date, onClose, onSave, reviewMode }: {
   task: Task | null; date: string; onClose: () => void; onSave: (draft: TaskDraft, id?: string) => Promise<void>;
+  reviewMode?: 'rollover' | 'manual';
 }) {
   const { colors } = useTheme();
   const db = useSQLiteContext();
-  const [draft, setDraft] = useState<TaskDraft>(task ?? { title: '', date, start_time: '09:00', end_time: '09:30', priority: 'medium', is_completed: 0, reminder_offset_minutes: 0 });
+  const [draft, setDraft] = useState<TaskDraft>(task ? { ...task, ...(reviewMode ? { date, is_completed: 0 } : {}) } : { title: '', date, start_time: '09:00', end_time: '09:30', priority: 'medium', is_completed: 0, reminder_offset_minutes: 0 });
   const [candidates, setCandidates] = useState<Task[]>([]);
   const [checking, setChecking] = useState(true);
   const [checkError, setCheckError] = useState(false);
@@ -36,6 +37,9 @@ export function TaskEditor({ task, date, onClose, onSave }: {
   async function submit() {
     const invalid = validateTask(draft);
     if (invalid) { setError(invalid); return; }
+    if (reviewMode && (draft.date < date || (reviewMode === 'rollover' && draft.date !== date))) {
+      setError(reviewMode === 'rollover' ? 'Choose today to migrate this task.' : 'Choose today or a future date.'); return;
+    }
     if (checking || checkError || saving) return;
     setSaving(true);
     try { await onSave(draft, task?.id); }

@@ -14,6 +14,11 @@ export function listReminderTasks(db: TaskDatabase): Promise<Task[]> {
   return db.getAllAsync<Task>('SELECT * FROM tasks WHERE is_completed = 0 ORDER BY date, start_time, id');
 }
 
+export async function deleteTask(db: TaskDatabase, id: string): Promise<void> {
+  const result = await db.runAsync('DELETE FROM tasks WHERE id = ?', id);
+  if (!result.changes) throw new Error('This task no longer exists. Please refresh your review.');
+}
+
 export async function saveTask(db: TaskDatabase, draft: TaskDraft, id?: string): Promise<Task> {
   const error = validateTask(draft);
   if (error) throw new Error(error);
